@@ -1,0 +1,13 @@
+services:
+  weather-api:
+    build: ./weather-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./weather-api/.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/weather/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
