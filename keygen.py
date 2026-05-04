@@ -13,12 +13,14 @@ import hashlib
 import os
 import re
 import secrets
+import sys
 from datetime import datetime, timedelta
 
-import pymysql
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from utils.db import get_db
 
 KEY_PREFIX = "wapi_"
 
@@ -62,14 +64,12 @@ def main():
     key_hash = hashlib.sha256(key.encode()).hexdigest()
     key_id = _hash_to_uuid(key_hash)
 
-    conn = pymysql.connect(
-        host=os.environ["SQL_HOST"],
-        user=os.environ["SQL_USER"],
-        password=os.environ["SQL_PASSWD"],
-        database=os.environ["SQL_DB"],
-        cursorclass=pymysql.cursors.DictCursor,
-        connect_timeout=5,
-    )
+    try:
+        conn = get_db()
+    except Exception as e:
+        print(f"Database connection failed: {e}", file=sys.stderr)
+        raise SystemExit(1)
+
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -77,6 +77,9 @@ def main():
                 (key_id, key_hash, label, expires_at),
             )
         conn.commit()
+    except Exception as e:
+        print(f"Database query failed: {e}", file=sys.stderr)
+        raise SystemExit(1)
     finally:
         conn.close()
 

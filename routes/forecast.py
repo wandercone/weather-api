@@ -2,7 +2,7 @@ import time
 from fastapi import APIRouter, HTTPException, Security, Query
 from utils.auth import require_api_key
 from utils.config import HOURLY_TABLE, DAILY_TABLE
-from utils.db import get_db, query_one, query_all, cache_get, cache_set
+from utils.db import db_conn, query_one, query_all, cache_get, cache_set
 from utils.log import logger
 from utils.units import n, to_f, to_mph
 
@@ -64,13 +64,7 @@ def forecast_daily(
         return data
 
     logger.info("DB fetch — daily forecast station=%s days=%s", station_id, days)
-    try:
-        conn = get_db()
-    except Exception as e:
-        logger.error("DB connection failed: %s", e)
-        raise HTTPException(status_code=503, detail=f"Database unavailable: {e}")
-
-    try:
+    with db_conn() as conn:
         latest_fetch = query_one(conn,
             f"SELECT MAX(fetched_at) AS fa FROM `{DAILY_TABLE}` WHERE station_id = %s",
             (station_id,))
@@ -82,8 +76,6 @@ def forecast_daily(
             f"SELECT * FROM `{DAILY_TABLE}` WHERE station_id = %s AND fetched_at = %s "
             "ORDER BY day_start_local ASC LIMIT %s",
             (station_id, latest_fetch["fa"], days))
-    finally:
-        conn.close()
 
     data = [build_daily_row(r, imperial) for r in rows]
     cache_set(cache_key, data)
@@ -105,13 +97,7 @@ def forecast_hourly(
         return data
 
     logger.info("DB fetch — hourly forecast station=%s hours=%s", station_id, hours)
-    try:
-        conn = get_db()
-    except Exception as e:
-        logger.error("DB connection failed: %s", e)
-        raise HTTPException(status_code=503, detail=f"Database unavailable: {e}")
-
-    try:
+    with db_conn() as conn:
         latest_fetch = query_one(conn,
             f"SELECT MAX(fetched_at) AS fa FROM `{HOURLY_TABLE}` WHERE station_id = %s",
             (station_id,))
@@ -124,8 +110,6 @@ def forecast_hourly(
             f"SELECT * FROM `{HOURLY_TABLE}` WHERE station_id = %s AND fetched_at = %s "
             "AND forecast_time >= %s ORDER BY forecast_time ASC LIMIT %s",
             (station_id, latest_fetch["fa"], now, hours))
-    finally:
-        conn.close()
 
     data = [build_hourly_row(r, imperial) for r in rows]
     cache_set(cache_key, data)

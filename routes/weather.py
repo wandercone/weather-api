@@ -2,7 +2,7 @@ import time
 from fastapi import APIRouter, HTTPException, Security, Query
 from utils.auth import require_api_key
 from utils.config import OBS_TABLE, DAILY_TABLE, STALE_THRESHOLD
-from utils.db import get_db, query_one, query_all, cache_get, cache_set
+from utils.db import db_conn, query_one, query_all, cache_get, cache_set
 from utils.log import logger
 from utils.units import n, to_f, to_mph, to_inches, to_inhg
 
@@ -153,18 +153,10 @@ def latest(
         return data
 
     logger.info("DB fetch — latest station=%s", station_id)
-    try:
-        conn = get_db()
-    except Exception as e:
-        logger.error("DB connection failed: %s", e)
-        raise HTTPException(status_code=503, detail=f"Database unavailable: {e}")
-
-    try:
+    with db_conn() as conn:
         row = query_one(conn,
             f"SELECT * FROM `{OBS_TABLE}` WHERE station_id = %s ORDER BY timestamp DESC LIMIT 1",
             (station_id,))
-    finally:
-        conn.close()
 
     if row is None:
         logger.warning("No observations found for station=%s", station_id)
@@ -189,13 +181,7 @@ def display(
         return data
 
     logger.info("DB fetch — display station=%s", station_id)
-    try:
-        conn = get_db()
-    except Exception as e:
-        logger.error("DB connection failed: %s", e)
-        raise HTTPException(status_code=503, detail=f"Database unavailable: {e}")
-
-    try:
+    with db_conn() as conn:
         obs = query_one(conn,
             f"SELECT * FROM `{OBS_TABLE}` WHERE station_id = %s ORDER BY timestamp DESC LIMIT 1",
             (station_id,))
@@ -212,8 +198,6 @@ def display(
                 f"SELECT * FROM `{DAILY_TABLE}` WHERE station_id = %s AND fetched_at = %s "
                 "ORDER BY day_start_local ASC LIMIT 2",
                 (station_id, latest_fetch["fa"]))
-    finally:
-        conn.close()
 
     data = build_display_response(obs, daily_rows, imperial)
     cache_set(cache_key, data)

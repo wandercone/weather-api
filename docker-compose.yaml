@@ -11,3 +11,11 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    networks:
+      - weather-net
+
+networks:
+  weather-net:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1400

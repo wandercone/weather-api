@@ -30,6 +30,14 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Weather API", docs_url=None, redoc_url=None, lifespan=lifespan)
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="10.253.100.1")
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error("Unhandled exception: %s", exc, exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
 @app.middleware("http")
 async def rate_limit(request: Request, call_next):
     if request.url.path != "/v1/weather/health":
@@ -71,4 +79,10 @@ app.include_router(forecast_router, prefix="/v1")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8000,
+        timeout_keep_alive=5,
+        timeout_graceful_shutdown=10,
+    )
